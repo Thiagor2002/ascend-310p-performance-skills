@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ascend 310P 性能"
+  short_description: "拆分并验证 vLLM-Ascend 在 310P 上的性能与算子优化"
+  default_prompt: "使用 $ascend-310p-performance 分析 Ascend 310P 上的推理性能，先固定口径再做单变量验证。"
