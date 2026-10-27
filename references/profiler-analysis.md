@@ -29,11 +29,14 @@
 
 ## 读图
 
-1. 对齐 CPU 与 NPU 时间线。NPU 空隙若落在 CPU 同步或小拷贝上，就是 host-bound。此时换一个更大的融合算子没有帮助。
-2. 用 op summary 的 self time 排序，不用 inclusive time 给模型前向排名。
-3. 分成四类再排：融合大算子、可融合小 vector 链、拷贝与格式转换、同步与 host 调用。
-4. 读实际导出的表头。关注 shape、dtype、format。同步 token-id D2H、每步 ND↔NZ、行数等于 MRoPE 维数的非连续拷贝，都比算子大类更有用。若出现 `tokens × vocab` D2H，它是严重的额外回退，但不是 #16489 直接前序的正常基线。
-5. PipeUtilization 低且时间线有气泡：先查 launch 和同步。pipe 低但 kernel 很长、没有气泡：再考虑算子替换或 layout。
+1. 对齐 CPU/Python lane 与 NPU stream lane。CPU span 结束不等于异步 kernel 完成；NPU 空隙若落在 CPU 同步或小拷贝上，就是 host-bound。此时换一个更大的融合算子没有帮助。
+2. 区分 launch、queue、execute：host 发射有空隙且 NPU 也空，查 Python/同步；host 连续发射而 NPU 排队，查设备热点与并发。
+3. 用 op summary 的 self time 排序，不用 inclusive time 给模型前向排名；核对调用次数是否与采样 step 数一致。
+4. 分成四类再排：融合大算子、可融合小 vector 链、拷贝与格式转换、同步与 host 调用。
+5. 读实际导出的表头。关注 Memcpy 方向、stream、shape、dtype、format。同步 token-id D2H、每步 ND↔NZ、行数等于 MRoPE 维数的非连续拷贝，都比算子大类更有用。若出现 `tokens × vocab` D2H，它是严重的额外回退，但不是 #16489 直接前序的正常基线。
+6. 稳态 decode 要确认 graph replay，而不是只看到 capture/compile。PipeUtilization 低且时间线有气泡：先查 launch 和同步；pipe 低但 kernel 很长、没有气泡：再考虑算子替换或 layout。
+
+独立 microbench 若用 wall-clock，计时边界两侧做对称同步；服务 trace 中不要为了计时增加同步。marker 只用于切分 prepare、target、draft、rejection、`synchronize_cpu`、postprocess，不替代内部 op 证据。
 
 ## 现象对照
 
